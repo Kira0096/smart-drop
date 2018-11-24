@@ -1,4 +1,4 @@
-# ResNet9 on CIFAR-10
+# ResNet18 on CIFAR-10
 
 
 ## Requirements
@@ -6,6 +6,7 @@
 ```bash
 pip install -r requirements.txt
 ```
+Change the root of your cifar10/cifar100 in config
 
 ## Usage
 

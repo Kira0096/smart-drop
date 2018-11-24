@@ -72,7 +72,7 @@ class ResNet(nn.Module):
         self.conv1 = conv3x3(3,64)
         self.bn1 = nn.BatchNorm2d(64)
         self.dropblock = LinearScheduler(
-            DropBlock2D(drop_prob=drop_prob, block_size=block_size, att=False),
+            DropBlock2D(drop_prob=drop_prob, block_size=block_size, att=True),
             start_value=0.,
             stop_value=drop_prob,
             nr_steps=5e3
