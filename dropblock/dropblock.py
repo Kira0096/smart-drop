@@ -61,18 +61,26 @@ class DropBlock2D(nn.Module):
             # get gamma value
             gamma = self._compute_gamma(x, mask_sizes)
             if self.att:
-                x_norm = self.normalize(x)
-                x_mask = (x_norm > 0.8).float().sum(dim=1)
-                gamma = gamma * x_mask.numel() / x_mask.sum()
-            # sample mask
-            mask = Bernoulli(gamma).sample((x.shape[0], *mask_sizes)).float()
+                # x_norm = self.normalize(x).sum(dim=1)
+                # x_median = torch.median(x, dim=1, keepdim=True)[0]
+                # x_mask = (((x > x_median).float().sum(dim=1)) > 0).float()
+                # gamma = gamma * x_mask.numel() / x_mask.sum()
+                
+                height_to_crop = x.shape[-2] - mask_height
+                width_to_crop = x.shape[-1] - mask_width
+                x_norm = self.normalize(x).sum(dim=1)[:, :-height_to_crop, :-width_to_crop]
+                gamma = x_norm / torch.mean(x_norm) * gamma
+                # sample mask
+                mask = Bernoulli(gamma).sample().float()
+            else:
+                mask = Bernoulli(gamma).sample((x.shape[0], *mask_sizes)).float()
 
             # place mask on input device
             mask = mask.to(x.device)
-            if self.att:
-                height_to_crop = x_mask.shape[-2] - mask_height
-                width_to_crop = x_mask.shape[-1] - mask_width
-                mask = mask * x_mask[:, :-height_to_crop, :-width_to_crop]
+            # if self.att:
+            #     height_to_crop = x_mask.shape[-2] - mask_height
+            #     width_to_crop = x_mask.shape[-1] - mask_width
+            #     mask = mask * x_mask[:, :-height_to_crop, :-width_to_crop]
             # compute block mask
             block_mask = self._compute_block_mask(mask)
 
