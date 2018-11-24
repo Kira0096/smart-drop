@@ -1,0 +1,7 @@
+root: /mnt/lustre/fengyan/Cutout/data/
+workers: 4
+bsize: 128
+epochs: 200
+lr: 0.1
+drop_prob: 0.1
+block_size: 5
