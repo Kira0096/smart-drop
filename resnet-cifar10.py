@@ -192,7 +192,7 @@ if __name__ == '__main__':
     pbar = ProgressBar()
     pbar.attach(trainer, ['loss'])
 
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, logger, model, evaluator, test_loader, pbar, args.name)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, logger, model, evaluator, test_loader, pbar, options.name)
 
     # start training
     t0 = time.time()
