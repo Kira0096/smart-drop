@@ -13,11 +13,11 @@ Change the root of your cifar10/cifar100 in config
 Run the example on the CPU:
 
 ```bash
-python resnet-cifar10.py -c config.yml
+python resnet-cifar10.py -n EXPNAME -c config.yml
 ```
 
 Run the example on the GPU (device 0):
 
 ```bash
-python resnet-cifar10.py -c config.yml --device 0
+python resnet-cifar10.py -n EXPNAME -c config.yml --device 0
 ```
