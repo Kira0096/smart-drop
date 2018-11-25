@@ -17,6 +17,8 @@ from dropblock.scheduler import LinearScheduler
 
 from torch.optim.lr_scheduler import MultiStepLR
 
+import numpy as np
+
 results = []
 
 
@@ -76,7 +78,7 @@ def resnet9(**kwargs):
 def resnet18(**kwargs):
     return ResNetCustom(BasicBlock, [2,2,2,2], **kwargs)
 
-def logger(engine, model, evaluator, loader, pbar):
+def logger(engine, model, evaluator, loader, pbar, name):
     evaluator.run(loader)
     metrics = evaluator.state.metrics
     avg_accuracy = metrics['accuracy']
@@ -85,6 +87,9 @@ def logger(engine, model, evaluator, loader, pbar):
                                                                         model.dropblock.dropblock.drop_prob)
     )
     results.append(avg_accuracy)
+    if avg_accuracy == max(results):
+        torch.save(model.state_dict(), 'checkpoints/' + name + '.pt')
+
 
 
 if __name__ == '__main__':
@@ -110,6 +115,7 @@ if __name__ == '__main__':
                         help='dropblock block size')
     parser.add_argument('--device', required=False, default=None, type=int,
                         help='CUDA device id for GPU training')
+    parser.add_argument('-n', '--name', required=True, help='exp_name')
     options = parser.parse_args()
 
     root = options.root
@@ -186,7 +192,7 @@ if __name__ == '__main__':
     pbar = ProgressBar()
     pbar.attach(trainer, ['loss'])
 
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, logger, model, evaluator, test_loader, pbar)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, logger, model, evaluator, test_loader, pbar, args.name)
 
     # start training
     t0 = time.time()
