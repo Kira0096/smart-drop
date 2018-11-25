@@ -75,7 +75,7 @@ class ResNet(nn.Module):
             DropBlock2D(drop_prob=drop_prob, block_size=block_size, att=True),
             start_value=0.,
             stop_value=drop_prob,
-            nr_steps=5e3
+            nr_steps=5e4
         )
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
