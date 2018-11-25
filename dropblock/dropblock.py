@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Bernoulli
-
+import sys
 
 class DropBlock2D(nn.Module):
     r"""Randomly zeroes 2D spatial blocks of the input tensor.
@@ -34,7 +34,7 @@ class DropBlock2D(nn.Module):
         self.att = att
 
     def normalize(self, input):
-        min_c, max_c = torch.min(input, 1, keepdim=True)[0], torch.max(input, 1, keepdim=True)[0]
+        min_c, max_c = input.min(1, keepdim=True)[0], input.max(1, keepdim=True)[0]
         input_norm = (input - min_c) / (max_c - min_c + 1e-8)
         return input_norm
 
@@ -61,31 +61,28 @@ class DropBlock2D(nn.Module):
             # get gamma value
             gamma = self._compute_gamma(x, mask_sizes)
             if self.att:
-                # x_norm = self.normalize(x).sum(dim=1)
-                # x_median = torch.median(x, dim=1, keepdim=True)[0]
-                # x_mask = (((x > x_median).float().sum(dim=1)) > 0).float()
-                # gamma = gamma * x_mask.numel() / x_mask.sum()
-                
-                height_to_crop = x.shape[-2] - mask_height
-                width_to_crop = x.shape[-1] - mask_width
-                x_norm = self.normalize(x).sum(dim=1)[:, :-height_to_crop, :-width_to_crop]
-                gamma = x_norm / torch.mean(x_norm) * gamma
-                # sample mask
-                mask = Bernoulli(gamma).sample().float()
+                x_norm = self.normalize(x)
+                x_mask = (x_norm > 0.8).float()
+                gamma = 1 - (1 - gamma) ** (x.shape[-1] * x.shape[-2] * x_mask.sum() / x_mask.numel())
+                gamma = torch.min(gamma.float(), torch.tensor(0.25))
+            
+                mask = Bernoulli(1 - gamma).sample((x.shape[0], x.shape[1])).byte().to(x.device)
+            
+                x_mask[mask, :, :] = 0
+                block_mask = 1 - x_mask
+                out = x * block_mask
             else:
+                # sample mask
                 mask = Bernoulli(gamma).sample((x.shape[0], *mask_sizes)).float()
 
-            # place mask on input device
-            mask = mask.to(x.device)
-            # if self.att:
-            #     height_to_crop = x_mask.shape[-2] - mask_height
-            #     width_to_crop = x_mask.shape[-1] - mask_width
-            #     mask = mask * x_mask[:, :-height_to_crop, :-width_to_crop]
-            # compute block mask
-            block_mask = self._compute_block_mask(mask)
+                # place mask on input device
+                mask = mask.to(x.device)
+                    
+                # compute block mask
+                block_mask = self._compute_block_mask(mask)
 
-            # apply block mask
-            out = x * block_mask[:, None, :, :]
+                # apply block mask
+                out = x * block_mask[:, None, :, :]
 
             # scale output
             out = out * block_mask.numel() / block_mask.sum()
