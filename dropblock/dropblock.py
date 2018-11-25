@@ -62,7 +62,7 @@ class DropBlock2D(nn.Module):
             gamma = self._compute_gamma(x, mask_sizes)
             if self.att:
                 x_norm = self.normalize(x)
-                x_mask = (x_norm > 0.8).float().sum(dim=1)
+                x_mask = (x_norm > 0.8).float().max(dim=1)[0]
                 gamma = gamma * x_mask.numel() / x_mask.sum()
             # sample mask
             mask = Bernoulli(gamma).sample((x.shape[0], *mask_sizes)).float()
