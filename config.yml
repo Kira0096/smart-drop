@@ -1,7 +1,9 @@
-root: /mnt/lustre/fengyan/Cutout/data/
+root: /home/ouyangzhihao/.keras/datasets
 workers: 4
 bsize: 128
 epochs: 200
 lr: 0.1
 drop_prob: 0.
 block_size: 5
+name: Test
+device: 0
