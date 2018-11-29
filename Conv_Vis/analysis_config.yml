@@ -1,0 +1,9 @@
+root: /home/ouyangzhihao/.keras/datasets
+workers: 4
+bsize: 128
+epochs: 20
+lr: 0.1
+drop_prob: 0.
+block_size: 5
+device: 0
+name: baseline
