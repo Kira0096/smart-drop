@@ -96,16 +96,21 @@ class ResNet(nn.Module):
         self.dropblock.step()
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.dropblock(self.layer1(out))
-        out_drop = out
+        out1 = out
         out = self.dropblock(self.layer2(out))
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
         out2 = out
+        out = self.layer3(out)
+        out3 = out
+        out = self.layer4(out)
+        out4 = out
+        out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        # return [out, out2, out_drop]
-        return out
+        return [out, out1.cpu().detach().numpy(),
+                out2.cpu().detach().numpy(),
+                out3.cpu().detach().numpy(),
+                out4.cpu().detach().numpy()]
+
 
 def ResNet18(**kwargs):
     return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
