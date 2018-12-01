@@ -67,9 +67,9 @@ class DropBlock2D(nn.Module):
                 gamma = torch.min(gamma.float(), torch.tensor(0.25))
             
                 mask = Bernoulli(1 - gamma).sample((x.shape[0], x.shape[1])).byte().to(x.device)
-            
+
                 x_mask[mask, :, :] = 0
-                block_mask = 1 - x_mask
+                block_mask = 1 - (x_mask * x_norm)
                 out = x * block_mask
             else:
                 # sample mask
@@ -88,6 +88,55 @@ class DropBlock2D(nn.Module):
             out = out * block_mask.numel() / block_mask.sum()
 
             return out
+
+    def get_mask(self, x):
+        # shape: (bsize, channels, height, width)
+
+        assert x.dim() == 4, \
+            "Expected input with 4 dimensions (bsize, channels, height, width)"
+
+        if not self.training or self.drop_prob == 0.:
+            return x
+        else:
+            # sample from a mask
+            mask_reduction = self.block_size // 2
+            mask_height = x.shape[-2] - mask_reduction
+            mask_width = x.shape[-1] - mask_reduction
+            mask_sizes = [mask_height, mask_width]
+
+            if any([x <= 0 for x in mask_sizes]):
+                raise ValueError('Input of shape {} is too small for block_size {}'
+                                 .format(tuple(x.shape), self.block_size))
+
+            # get gamma value
+            gamma = self._compute_gamma(x, mask_sizes)
+            if self.att:
+                x_norm = self.normalize(x)
+                x_mask = (x_norm > 0.6).float()
+                gamma = 1 - (1 - gamma) ** (x.shape[-1] * x.shape[-2] * x_mask.sum() / x_mask.numel())
+                # gamma = torch.min(gamma.float(), torch.tensor(0.25))
+            
+                mask = Bernoulli(1 - gamma).sample((x.shape[0], x.shape[1])).byte().to(x.device).squeeze(-1)
+                # x_mask[mask, :, :] = 0
+                block_mask = 1 - (x_mask * x_norm)
+                out = x * block_mask
+            else:
+                # sample mask
+                mask = Bernoulli(gamma).sample((x.shape[0], *mask_sizes)).float()
+
+                # place mask on input device
+                mask = mask.to(x.device)
+                    
+                # compute block mask
+                block_mask = self._compute_block_mask(mask)
+
+                # apply block mask
+                out = x * block_mask[:, None, :, :]
+
+            # scale output
+            out = out * block_mask.numel() / block_mask.sum()
+
+            return out, 1 - block_mask
 
     def _compute_block_mask(self, mask):
         block_mask = F.conv2d(mask[:, None, :, :],

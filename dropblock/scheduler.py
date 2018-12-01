@@ -11,7 +11,8 @@ class LinearScheduler(nn.Module):
 
     def forward(self, x):
         return self.dropblock(x)
-
+    def get_mask(self, x):
+        return self.dropblock.get_mask(x)
     def step(self):
         if self.i < len(self.drop_values):
             self.dropblock.drop_prob = self.drop_values[self.i]
