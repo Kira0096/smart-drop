@@ -6,6 +6,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torchvision.models.resnet import BasicBlock, ResNet
 from resnet import ResNet18
+from wideresnet import WideResNet
 from ignite.engine import create_supervised_trainer, create_supervised_evaluator, Events
 from ignite.metrics import Accuracy
 from ignite.metrics import RunningAverage
@@ -18,13 +19,16 @@ from dropblock.scheduler import LinearScheduler
 from torch.optim.lr_scheduler import MultiStepLR
 
 import numpy as np
+import json
+
+from cutout import Cutout
 
 results = []
 
 
 class ResNetCustom(ResNet):
 
-    def __init__(self, block, layers, num_classes=1000, drop_prob=0., block_size=5):
+    def __init__(self, block, layers, num_classes=1000, drop_prob=0., block_size=5, nr_steps=5e3):
         super(ResNet, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -35,7 +39,7 @@ class ResNetCustom(ResNet):
             DropBlock2D(drop_prob=drop_prob, block_size=block_size),
             start_value=0.,
             stop_value=drop_prob,
-            nr_steps=5e3
+            nr_steps=nr_steps
         )
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -116,6 +120,16 @@ if __name__ == '__main__':
     parser.add_argument('--device', required=False, default=None, type=int,
                         help='CUDA device id for GPU training')
     parser.add_argument('-n', '--name', required=True, help='exp_name')
+    parser.add_argument('--gamma', required=False, type=float, default=0.25,
+                        help='gamma')
+    parser.add_argument('--nr_steps', required=False, type=int, default=5000,
+                        help='number of step')
+    parser.add_argument('--model', required=False, type=str, default='resnet',
+                        help='model')
+    parser.add_argument('--cutout', action='store_true', default=False,
+                    help='apply cutout')
+    parser.add_argument('--length', required=False, type=int, default=16,
+                        help='cut out length')
     options = parser.parse_args()
 
     root = options.root
@@ -134,6 +148,13 @@ if __name__ == '__main__':
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize
+    ]) if not options.cutout else \
+    transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+        Cutout(n_holes=1, length=options.length)
     ])
 
     test_transform = transforms.Compose([
@@ -144,6 +165,37 @@ if __name__ == '__main__':
                                                  download=True, transform=train_transform)
         test_set = torchvision.datasets.CIFAR10(root=root, train=False,
                                             download=True, transform=test_transform)
+        num_classes = 10
+    elif options.dataset == 'svhn':
+        normalize = transforms.Normalize(mean=[x / 255.0 for x in[109.9, 109.7, 113.8]],
+                                         std=[x / 255.0 for x in [50.1, 50.6, 50.8]])
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+        ]) if not options.cutout else \
+        transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+            Cutout(n_holes=1, length=options.length)
+        ])
+        train_set = torchvision.datasets.SVHN(root=root, split='train',
+                                                 transform=train_transform, download=True)
+        extra_set = torchvision.datasets.SVHN(root=root, split='extra',
+                                            transform=train_transform, download=True)
+        # Combine both training splits (https://arxiv.org/pdf/1605.07146.pdf)
+        data = np.concatenate([train_set.data, extra_set.data], axis=0)
+        labels = np.concatenate([train_set.labels, extra_set.labels], axis=0)
+        train_set.data = data
+        train_set.labels = labels
+
+        test_set = torchvision.datasets.SVHN(root=root,
+                                     split='test',
+                                     transform=test_transform,
+                                     download=True)
         num_classes = 10
     else:
         train_set = torchvision.datasets.CIFAR100(root=root, train=True,
@@ -164,13 +216,16 @@ if __name__ == '__main__':
     #            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     # define model
-    model = ResNet18(num_classes=num_classes, drop_prob=drop_prob, block_size=block_size)
+    if options.model == 'resnet':
+        model = ResNet18(num_classes=num_classes, drop_prob=drop_prob, block_size=block_size, nr_steps=options.nr_steps)
+    else:
+        model = WideResNet(depth=28, num_classes=num_classes, widen_factor=10, dropRate=0.3, drop_prob=drop_prob, block_size=block_size, nr_steps=options.nr_steps)
 
     # define loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr,
                                 momentum=0.9, nesterov=True, weight_decay=5e-4)
-    scheduler = MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2)
+    scheduler = MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=options.gamma)
 
     
     # create ignite engines
@@ -200,3 +255,5 @@ if __name__ == '__main__':
     t1 = time.time()
     print('Best Accuracy:', max(results))
     print('Total time:', t1 - t0)
+    with open(options.name + '_result.txt', 'w') as fw:
+        fw.write(json.dumps(results))

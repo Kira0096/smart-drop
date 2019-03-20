@@ -26,12 +26,13 @@ class DropBlock2D(nn.Module):
 
     """
 
-    def __init__(self, drop_prob, block_size, att=False):
+    def __init__(self, drop_prob, block_size, att=False, beta=0.8):
         super(DropBlock2D, self).__init__()
 
         self.drop_prob = drop_prob
         self.block_size = block_size
         self.att = att
+        self.beta = beta
 
     def normalize(self, input):
         min_c, max_c = input.min(1, keepdim=True)[0], input.max(1, keepdim=True)[0]
@@ -62,7 +63,7 @@ class DropBlock2D(nn.Module):
             gamma = self._compute_gamma(x, mask_sizes)
             if self.att:
                 x_norm = self.normalize(x)
-                x_mask = (x_norm > 0.8).float()
+                x_mask = (x_norm > self.beta).float()
                 gamma = 1 - (1 - gamma) ** (x.shape[-1] * x.shape[-2] * x_mask.sum() / x_mask.numel())
                 gamma = torch.min(gamma.float(), torch.tensor(0.25))
             
